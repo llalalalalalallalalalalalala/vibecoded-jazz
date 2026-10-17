@@ -29,21 +29,18 @@ def synth_note(freq, duration, instrument="chord", velocity=0.8):
   t = np.linspace(0, duration, num_samples, endpoint=False)
 
   if instrument == "bass":
-    # Głęboki, ciepły kontrabas (tylko podstawowe alikwoty)
     wave = (
         np.sin(2 * np.pi * freq * t) * 0.8
         + np.sin(2 * np.pi * freq * 2 * t) * 0.2
     )
     envelope = np.exp(-3.5 * t) * (1 - np.exp(-70.0 * t))
   elif instrument == "chord":
-    # Miękkie, przestrzenne electric piano (czystsze fale, zero ostrości)
     wave = (
         np.sin(2 * np.pi * freq * t) * 0.6
         + np.sin(2 * np.pi * freq * 2 * t) * 0.2
     )
     envelope = np.exp(-2.0 * t) * (1 - np.exp(-30.0 * t))
   elif instrument == "lead":
-    # Śpiewający, łagodny flet / saksofon solowy
     vibrato = 4.0 * np.sin(2 * np.pi * 5.0 * t)
     freq_mod = freq + vibrato
     wave = (
@@ -52,16 +49,13 @@ def synth_note(freq, duration, instrument="chord", velocity=0.8):
     )
     envelope = np.exp(-1.2 * t) * (1 - np.exp(-25.0 * t))
   elif instrument == "drum_kick":
-    # Miękka stopka / surdo
     freq_env = 80 * np.exp(-22 * t) + 35
     wave = np.sin(2 * np.pi * freq_env * t)
     envelope = np.exp(-9 * t)
   elif instrument == "drum_rim":
-    # Delikatny rimshot
     wave = np.random.uniform(-1, 1, num_samples)
     envelope = np.exp(-50 * t)
   elif instrument == "drum_shaker":
-    # Subtelny shaker Bossa Nova (bardzo cichy)
     wave = np.random.uniform(-1, 1, num_samples)
     envelope = np.exp(-45 * t) * (t < 0.08)
   else:
@@ -84,7 +78,6 @@ def create_bar_audio(root_midi, chord_notes, scale_notes):
     elif idx < bar_samples:
       buffer[idx:] += audio_piece[: bar_samples - idx]
 
-  # 1. Perkusja (Bardzo stonowana i przestrzenna)
   eighth = BEAT / 2
   for i in range(8):
     vel = 0.22 if (i % 2 == 1) else 0.1
@@ -96,7 +89,6 @@ def create_bar_audio(root_midi, chord_notes, scale_notes):
   for tb in [0.0, BEAT * 2.0]:
     add_sound(synth_note(0, 0.25, "drum_kick", velocity=0.6), tb)
 
-  # 2. Stabilny, elegancki kontrabas (Pryma - Kwinta)
   r_bass = root_midi - 12
   f_bass = r_bass + 7
   bass_hits = [
@@ -110,7 +102,6 @@ def create_bar_audio(root_midi, chord_notes, scale_notes):
         synth_note(midi_to_freq(m_note), BEAT * 0.65, "bass", velocity=vel), tb
     )
 
-  # 3. Przestrzenne, czyste akordy (Comping w punktach syncopowanych)
   comp_times = [BEAT * 0.5, BEAT * 2.0, BEAT * 3.25]
   for tb in comp_times:
     for m_note in chord_notes:
@@ -121,15 +112,12 @@ def create_bar_audio(root_midi, chord_notes, scale_notes):
           tb,
       )
 
-  # 4. Spokojna, śpiewająca melodia solowa (Krok po kroku w skali)
   if scale_notes:
-    # Wąski, bezpieczny rejestr solowy
     lead_scale = [n + 12 for n in scale_notes if 60 <= n + 12 <= 82]
     if lead_scale:
       current_note = random.choice(lead_scale)
       phrase_starts = [BEAT * 0.5, BEAT * 2.0]
       for tb in phrase_starts:
-        # Płynny ruch o małe interwały
         step = random.choice([-1, 0, 1])
         try:
           idx = lead_scale.index(current_note)
@@ -146,7 +134,6 @@ def create_bar_audio(root_midi, chord_notes, scale_notes):
   return buffer
 
 
-# --- KLASYCZNA, SPOKOJNA PROGRESJA JAZZOWA (F-dur) ---
 CHORD_PROGRESSION = [
     ("Fmaj7", 53, [53, 60, 64, 67], [53, 55, 57, 60, 62, 65]),
     ("Fmaj7", 53, [53, 60, 64, 67], [53, 55, 57, 60, 62, 65]),
@@ -158,12 +145,10 @@ CHORD_PROGRESSION = [
     ("A7", 57, [57, 64, 67, 73], [57, 60, 63, 65, 68, 70]),
 ]
 
-# Kolejka przesyłająca wygenerowane chorusy do słuchaczy radia
 global_audio_queue = queue.Queue(maxsize=10)
 
 
 def music_producer_loop():
-  """Wątek w tle generujący muzykę w nieskończoność."""
   chorus_num = 1
   while True:
     chorus_buffers = []
@@ -173,7 +158,6 @@ def music_producer_loop():
 
     full_chorus = np.concatenate(chorus_buffers)
 
-    # Subtelny, ciepły pogłos i normalizacja głośności
     delay_samples = int(0.25 * SAMPLE_RATE)
     if len(full_chorus) > delay_samples:
       full_chorus[delay_samples:] += full_chorus[:-delay_samples] * 0.15
@@ -182,7 +166,6 @@ def music_producer_loop():
     if max_val > 0:
       full_chorus = full_chorus / max_val * 0.7
 
-    # Konwersja na 16-bit PCM (int16) do strumienia WAV
     audio_int16 = (full_chorus * 32767).astype(np.int16)
     stereo_pcm = np.column_stack((audio_int16, audio_int16)).flatten()
 
@@ -190,7 +173,6 @@ def music_producer_loop():
     chorus_num += 1
 
 
-# --- HTTP STREAMING SERVER ---
 class RadioStreamHandler(http.server.BaseHTTPRequestHandler):
 
   def do_GET(self):
@@ -200,7 +182,6 @@ class RadioStreamHandler(http.server.BaseHTTPRequestHandler):
       self.send_header("Transfer-Encoding", "chunked")
       self.end_headers()
 
-      # Nagłówek strumieniowego pliku WAV
       channels = 2
       bits_per_sample = 16
       byte_rate = SAMPLE_RATE * channels * (bits_per_sample // 8)
@@ -231,34 +212,29 @@ class RadioStreamHandler(http.server.BaseHTTPRequestHandler):
           self.wfile.write(chunk_bytes)
           self.wfile.flush()
       except (ConnectionResetError, BrokenPipeError):
-        # Klient zamknął odtwarzacz / rozłączył się
         pass
     else:
       self.send_response(404)
       self.end_headers()
+      # POPRAWIONO: Zakodowanie polskich znaków do UTF-8 za pomocą .encode()
       self.wfile.write(
-          b"Strona nie znaleziona. Słuchaj radia pod adresem / lub /stream.wav"
+          "Strona nie znaleziona. Słuchaj radia pod adresem / lub /stream.wav".encode(
+              "utf-8"
+          )
       )
 
   def log_message(self, format, *args):
-    # Wyciszenie standardowych logów HTTP dla czystości konsoli
     pass
 
 
 if __name__ == "__main__":
-  # Uruchomienie producenta muzyki w tle
   producer_thread = threading.Thread(target=music_producer_loop, daemon=True)
   producer_thread.start()
 
-  print("\n" + "=" * 50)
-  print(f"📡 INTERNETOWE RADIO BOSSA NOVA (Harmonijny Mix)")
-  print(f"🌍 Serwer nasłuchuje na porcie: {PORT}")
-  print(f"🎵 Słuchaj pod adresem: http://localhost:{PORT}/")
-  print("=" * 50 + "\n")
+  print(f"Uruchomiono radio na porcie {PORT}")
 
-  # Nasłuchiwanie na 0.0.0.0 (wymagane m.in. dla Render.com)
   with socketserver.ThreadingTCPServer(("0.0.0.0", PORT), RadioStreamHandler) as httpd:
     try:
       httpd.serve_forever()
     except KeyboardInterrupt:
-      print("\n\n👋 Serwer radia został zatrzymany.")
+      pass
